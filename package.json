@@ -22,17 +22,18 @@
     "node": ">=10"
   },
   "devDependencies": {
-    "@types/chai": "^4.2.6",
+    "@types/chai": "^4.2.3",
     "@types/mocha": "^5.2.7",
     "chai": "^4.2.0",
-    "ethereum-waffle": "^2.4.1",
+    "ethereum-waffle": "3.3.0",
     "ethereumjs-util": "^6.2.0",
-    "mocha": "^6.2.2",
+    "mocha": "^7.1.2",
     "prettier": "^1.19.1",
     "rimraf": "^3.0.0",
     "solc": "0.5.16",
     "ts-node": "^8.5.4",
-    "typescript": "^3.7.3"
+    "typescript": "^3.8.3",
+    "ethers" : "5.1.0" 
   },
   "scripts": {
     "lint": "yarn prettier ./test/*.ts --check",
@@ -41,7 +42,7 @@
     "precompile": "yarn clean",
     "compile": "waffle .waffle.json",
     "pretest": "yarn compile",
-    "test": "mocha",
+    "test": "export NODE_ENV=test && mocha",
     "prepublishOnly": "yarn test"
   },
   "license": "GPL-3.0-or-later"

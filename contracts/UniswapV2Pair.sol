@@ -10,6 +10,8 @@ import './interfaces/IUniswapV2Callee.sol';
 
 contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     using SafeMath  for uint;
+    using SafeMath for uint112;
+    using SafeMath for uint256;
     using UQ112x112 for uint224;
 
     uint public constant MINIMUM_LIQUIDITY = 10**3;
@@ -22,11 +24,26 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     uint112 private reserve0;           // uses single storage slot, accessible via getReserves
     uint112 private reserve1;           // uses single storage slot, accessible via getReserves
     uint32  private blockTimestampLast; // uses single storage slot, accessible via getReserves
-
+    
+   
     uint public price0CumulativeLast;
     uint public price1CumulativeLast;
     uint public kLast; // reserve0 * reserve1, as of immediately after the most recent liquidity event
-
+    // Represents user's free commission right
+    struct FreeFeeAmount {
+        uint256 token0FeeFree;
+        uint256 token1FeeFree;
+    }
+    // Struct to prevent stack too deep errors
+    struct SwapValues {
+        bool discountApplied;
+        uint numerator;
+        uint denominator;
+        uint amount1Out;
+        uint amount0Out;
+    }
+    // Aggregated staking values per user
+    mapping(address => FreeFeeAmount) public _freeFees;
     uint private unlocked = 1;
     modifier lock() {
         require(unlocked == 1, 'UniswapV2: LOCKED');
@@ -34,7 +51,7 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         _;
         unlocked = 1;
     }
-
+    
     function getReserves() public view returns (uint112 _reserve0, uint112 _reserve1, uint32 _blockTimestampLast) {
         _reserve0 = reserve0;
         _reserve1 = reserve1;
@@ -160,22 +177,96 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         require(amount0Out > 0 || amount1Out > 0, 'UniswapV2: INSUFFICIENT_OUTPUT_AMOUNT');
         (uint112 _reserve0, uint112 _reserve1,) = getReserves(); // gas savings
         require(amount0Out < _reserve0 && amount1Out < _reserve1, 'UniswapV2: INSUFFICIENT_LIQUIDITY');
-
+        //check if there is free fee right
+        SwapValues memory swapVals;
+        FreeFeeAmount storage amounts = _freeFees[msg.sender];
+        
+        swapVals.amount0Out = amount0Out;
+        swapVals.amount1Out =  amount1Out;
+        
+        // Calculate total in without fee then calculate fee free and paid part for token0
+        if (swapVals.amount1Out > 0 && amounts.token0FeeFree > 0 ){
+            swapVals.numerator = _reserve0.mul(swapVals.amount1Out).mul(1000);
+            swapVals.denominator = _reserve1.sub(swapVals.amount1Out).mul(997);
+            uint amountIn = (swapVals.numerator / swapVals.denominator).add(1);
+            
+            uint feeFreePart;
+            if (amounts.token0FeeFree >= amountIn) feeFreePart = amountIn;
+            if (amountIn > amounts.token0FeeFree) feeFreePart = amounts.token0FeeFree;
+            amounts.token0FeeFree = (amounts.token0FeeFree).sub(feeFreePart);
+            swapVals.discountApplied = true;
+            if (feeFreePart == amountIn){
+                
+                swapVals.numerator = amountIn.mul(_reserve1);
+                swapVals.denominator = _reserve0.add(amountIn);
+                swapVals.amount1Out = swapVals.numerator / swapVals.denominator;
+                
+            }else if (amountIn > feeFreePart) {
+                uint feePaidPart = amountIn.sub(feeFreePart);
+                
+                swapVals.numerator = feeFreePart.mul(_reserve1);
+                swapVals.denominator = _reserve0.add(feeFreePart);
+                uint feeFreeOut = swapVals.numerator / swapVals.denominator;
+                uint amountInWithFee = feePaidPart.mul(997);
+                swapVals.numerator = amountInWithFee.mul(_reserve1);
+                swapVals.denominator = _reserve0.mul(1000).add(amountInWithFee);
+                swapVals.amount1Out = swapVals.numerator / swapVals.denominator;
+                swapVals.amount1Out = swapVals.amount1Out.add(feeFreeOut);
+               
+            }
+            
+        }
+        // Calculate total in without fee then calculate fee free and paid part for token1
+        if (swapVals.amount0Out > 0 && amounts.token1FeeFree > 0 ){
+            swapVals.numerator = _reserve1.mul(swapVals.amount0Out).mul(1000);
+            swapVals.denominator = _reserve0.sub(swapVals.amount0Out).mul(997);
+            uint amountIn = (swapVals.numerator / swapVals.denominator).add(1);
+            uint feeFreePart;
+            if (amounts.token1FeeFree >= amountIn) feeFreePart = amountIn;
+            if (amountIn > amounts.token1FeeFree) feeFreePart = amounts.token1FeeFree;
+            amounts.token1FeeFree = (amounts.token1FeeFree).sub(feeFreePart);
+            swapVals.discountApplied = true;
+            if (feeFreePart == amountIn){
+               
+                swapVals.numerator = amountIn.mul(_reserve0);
+                swapVals.denominator = _reserve1.add(amountIn);
+                swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
+               
+            }else if (amountIn > feeFreePart) {
+                uint feePaidPart = amountIn.sub(feeFreePart);
+                swapVals.numerator = feeFreePart.mul(_reserve0);
+                swapVals.denominator = _reserve1.add(feeFreePart);
+                uint feeFreeOut = swapVals.numerator / swapVals.denominator;
+                uint amountInWithFee = feePaidPart.mul(997);
+                swapVals.numerator = amountInWithFee.mul(_reserve0);
+                swapVals.denominator = _reserve1.mul(1000).add(amountInWithFee);
+                swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
+                swapVals.amount0Out = swapVals.amount0Out.add(feeFreeOut);
+                
+                
+            }
+           
+        }
+       
         uint balance0;
         uint balance1;
         { // scope for _token{0,1}, avoids stack too deep errors
         address _token0 = token0;
         address _token1 = token1;
         require(to != _token0 && to != _token1, 'UniswapV2: INVALID_TO');
-        if (amount0Out > 0) _safeTransfer(_token0, to, amount0Out); // optimistically transfer tokens
-        if (amount1Out > 0) _safeTransfer(_token1, to, amount1Out); // optimistically transfer tokens
-        if (data.length > 0) IUniswapV2Callee(to).uniswapV2Call(msg.sender, amount0Out, amount1Out, data);
+        if (swapVals.amount0Out > 0) _safeTransfer(_token0, to, swapVals.amount0Out); // optimistically transfer tokens
+        if (swapVals.amount1Out > 0) _safeTransfer(_token1, to, swapVals.amount1Out); // optimistically transfer tokens
+        if (data.length > 0) IUniswapV2Callee(to).uniswapV2Call(msg.sender, swapVals.amount0Out, swapVals.amount1Out, data);
         balance0 = IERC20(_token0).balanceOf(address(this));
         balance1 = IERC20(_token1).balanceOf(address(this));
         }
-        uint amount0In = balance0 > _reserve0 - amount0Out ? balance0 - (_reserve0 - amount0Out) : 0;
-        uint amount1In = balance1 > _reserve1 - amount1Out ? balance1 - (_reserve1 - amount1Out) : 0;
+        //Update new free fee rights to clear readibility I repeat above transaction here
+        if (swapVals.amount0Out > 0) amounts.token0FeeFree = (amounts.token0FeeFree).add(swapVals.amount0Out);
+        if (swapVals.amount1Out > 0) amounts.token1FeeFree = (amounts.token1FeeFree).add(swapVals.amount1Out);
+        uint amount0In = balance0 > _reserve0 - swapVals.amount0Out ? balance0 - (_reserve0 - swapVals.amount0Out) : 0;
+        uint amount1In = balance1 > _reserve1 - swapVals.amount1Out ? balance1 - (_reserve1 - swapVals.amount1Out) : 0;
         require(amount0In > 0 || amount1In > 0, 'UniswapV2: INSUFFICIENT_INPUT_AMOUNT');
+        if (swapVals.discountApplied == false)
         { // scope for reserve{0,1}Adjusted, avoids stack too deep errors
         uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
         uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
@@ -183,7 +274,7 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         }
 
         _update(balance0, balance1, _reserve0, _reserve1);
-        emit Swap(msg.sender, amount0In, amount1In, amount0Out, amount1Out, to);
+        emit Swap(msg.sender, amount0In, amount1In, swapVals.amount0Out, swapVals.amount1Out, to);
     }
 
     // force balances to match reserves
