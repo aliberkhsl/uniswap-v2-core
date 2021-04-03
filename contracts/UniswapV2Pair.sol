@@ -37,10 +37,12 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     // Struct to prevent stack too deep errors
     struct SwapValues {
         bool discountApplied;
+        bool partialDiscount;
         uint numerator;
         uint denominator;
         uint amount1Out;
         uint amount0Out;
+        uint feePaidPart;
     }
     // Aggregated staking values per user
     mapping(address => FreeFeeAmount) public _freeFees;
@@ -203,7 +205,8 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
                 
             }else if (amountIn > feeFreePart) {
                 uint feePaidPart = amountIn.sub(feeFreePart);
-                
+                swapVals.feePaidPart = feePaidPart;
+                swapVals.partialDiscount = true;
                 swapVals.numerator = feeFreePart.mul(_reserve1);
                 swapVals.denominator = _reserve0.add(feeFreePart);
                 uint feeFreeOut = swapVals.numerator / swapVals.denominator;
@@ -233,7 +236,9 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
                 swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
                
             }else if (amountIn > feeFreePart) {
+                swapVals.partialDiscount = true;
                 uint feePaidPart = amountIn.sub(feeFreePart);
+                swapVals.feePaidPart = feePaidPart;
                 swapVals.numerator = feeFreePart.mul(_reserve0);
                 swapVals.denominator = _reserve1.add(feeFreePart);
                 uint feeFreeOut = swapVals.numerator / swapVals.denominator;
@@ -268,9 +273,22 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
         require(amount0In > 0 || amount1In > 0, 'UniswapV2: INSUFFICIENT_INPUT_AMOUNT');
         if (swapVals.discountApplied == false)
         { // scope for reserve{0,1}Adjusted, avoids stack too deep errors
-        uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
-        uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
-        require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(1000**2), 'UniswapV2: K');
+            uint balance0Adjusted = balance0.mul(1000).sub(amount0In.mul(3));
+            uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
+            require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(1000**2), 'UniswapV2: K');
+        }else{
+            if(swapVals.partialDiscount == false)
+            {
+                uint balance0Adjusted = balance0;
+                uint balance1Adjusted = balance1;
+                require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1), 'UniswapV2: K');
+            }else
+            {
+                uint balance0Adjusted = balance0.mul(1000).sub(swapVals.feePaidPart.mul(3));
+                uint balance1Adjusted = balance1.mul(1000).sub(swapVals.feePaidPart.mul(3));
+                require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1), 'UniswapV2: K');
+            }
+            
         }
 
         _update(balance0, balance1, _reserve0, _reserve1);
