@@ -81,7 +81,7 @@ describe('UniswapV2Pair', () => {
     console.log(formatEther(reservesAfterThird[1]))
     const afterThird = await pair._freeFees(wallet.address)
     console.log(formatEther(afterThird.token1FeeFree))
-    console.log("burada")
+    
     
     const expectedAmountFour = bigNumberify('1583827894833494895')
     const expectedTransferFour = bigNumberify('1586936173173510706')
