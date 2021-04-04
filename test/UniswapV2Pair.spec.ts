@@ -55,9 +55,9 @@ describe('UniswapV2Pair', () => {
     let reserveIn = reserves[1]
     console.log(formatEther(expectedOutputAmount))
     //With fee expected output
-    let expectedAmountTwo = bigNumberify('994550668500000000')
+    let expectedAmountTwo = bigNumberify('994550668459521906')
     //Without fee expected transfer
-    let expectedTransfer = bigNumberify('997271983317089201')
+    let expectedTransfer = bigNumberify('997271983268164043')
     console.log(formatEther(expectedAmountTwo))
     await token0.transfer(pair.address, expectedOutputAmount)
     await expect(pair.swap(0, expectedAmountTwo, wallet.address, '0x',overrides)).to.emit(token1, 'Transfer')
@@ -81,16 +81,16 @@ describe('UniswapV2Pair', () => {
     console.log(formatEther(reservesAfterThird[1]))
     const afterThird = await pair._freeFees(wallet.address)
     console.log(formatEther(afterThird.token1FeeFree))
+    console.log("burada")
     
-    
-    const expectedAmountFour = bigNumberify('1583827894800000000')
-    const expectedTransferFour = bigNumberify('1685234513328394547')
+    const expectedAmountFour = bigNumberify('1583827894833494895')
+    const expectedTransferFour = bigNumberify('1586936173173510706')
     const fourthSwapAmount = expandTo18Decimals(3)
     await token1.transfer(pair.address, fourthSwapAmount)
     await expect(pair.swap(expectedAmountFour, 0, wallet.address, '0x',overrides)).to.emit(token0,'Transfer').withArgs(pair.address ,wallet.address,expectedTransferFour)
     const afterFourth = await pair._freeFees(wallet.address)
     expect(afterFourth.token0FeeFree).to.eq(expectedTransferFour)
-   
+  
   })
   
 

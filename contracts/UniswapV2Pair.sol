@@ -37,12 +37,11 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
     // Struct to prevent stack too deep errors
     struct SwapValues {
         bool discountApplied;
-        bool partialDiscount;
         uint numerator;
         uint denominator;
         uint amount1Out;
         uint amount0Out;
-        uint feePaidPart;
+        uint feeAmount;
     }
     // Aggregated staking values per user
     mapping(address => FreeFeeAmount) public _freeFees;
@@ -197,25 +196,22 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
             if (amountIn > amounts.token0FeeFree) feeFreePart = amounts.token0FeeFree;
             amounts.token0FeeFree = (amounts.token0FeeFree).sub(feeFreePart);
             swapVals.discountApplied = true;
-            if (feeFreePart == amountIn){
+            if (amountIn > feeFreePart) {
+                uint feePaidPart = amountIn.sub(feeFreePart);
+               
+                swapVals.feeAmount = feePaidPart.mul(3);
+                uint amountInWithFee = (feePaidPart.mul(997)).add(feeFreePart.mul(1000));
+                swapVals.numerator = (amountInWithFee.add(feeFreePart)).mul(_reserve1);
+                swapVals.denominator = _reserve0.mul(1000).add(amountInWithFee);
+                swapVals.amount1Out = swapVals.numerator / swapVals.denominator;
+                
+               
+            }else if (feeFreePart == amountIn){
                 
                 swapVals.numerator = amountIn.mul(_reserve1);
                 swapVals.denominator = _reserve0.add(amountIn);
                 swapVals.amount1Out = swapVals.numerator / swapVals.denominator;
                 
-            }else if (amountIn > feeFreePart) {
-                uint feePaidPart = amountIn.sub(feeFreePart);
-                swapVals.feePaidPart = feePaidPart;
-                swapVals.partialDiscount = true;
-                swapVals.numerator = feeFreePart.mul(_reserve1);
-                swapVals.denominator = _reserve0.add(feeFreePart);
-                uint feeFreeOut = swapVals.numerator / swapVals.denominator;
-                uint amountInWithFee = feePaidPart.mul(997);
-                swapVals.numerator = amountInWithFee.mul(_reserve1);
-                swapVals.denominator = _reserve0.mul(1000).add(amountInWithFee);
-                swapVals.amount1Out = swapVals.numerator / swapVals.denominator;
-                swapVals.amount1Out = swapVals.amount1Out.add(feeFreeOut);
-               
             }
             
         }
@@ -229,26 +225,25 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
             if (amountIn > amounts.token1FeeFree) feeFreePart = amounts.token1FeeFree;
             amounts.token1FeeFree = (amounts.token1FeeFree).sub(feeFreePart);
             swapVals.discountApplied = true;
-            if (feeFreePart == amountIn){
+           
+            if (amountIn > feeFreePart) {
+                uint feePaidPart = amountIn.sub(feeFreePart);
+                swapVals.feeAmount = feePaidPart.mul(3);
+                
+                
+                uint amountInWithFee =  (feePaidPart.mul(997)).add(feeFreePart.mul(1000));
+                swapVals.numerator = amountInWithFee.mul(_reserve0);
+                swapVals.denominator = _reserve1.mul(1000).add(amountInWithFee);
+                swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
                
+                
+                
+            }else if (feeFreePart == amountIn){
+                
                 swapVals.numerator = amountIn.mul(_reserve0);
                 swapVals.denominator = _reserve1.add(amountIn);
                 swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
                
-            }else if (amountIn > feeFreePart) {
-                swapVals.partialDiscount = true;
-                uint feePaidPart = amountIn.sub(feeFreePart);
-                swapVals.feePaidPart = feePaidPart;
-                swapVals.numerator = feeFreePart.mul(_reserve0);
-                swapVals.denominator = _reserve1.add(feeFreePart);
-                uint feeFreeOut = swapVals.numerator / swapVals.denominator;
-                uint amountInWithFee = feePaidPart.mul(997);
-                swapVals.numerator = amountInWithFee.mul(_reserve0);
-                swapVals.denominator = _reserve1.mul(1000).add(amountInWithFee);
-                swapVals.amount0Out = swapVals.numerator / swapVals.denominator;
-                swapVals.amount0Out = swapVals.amount0Out.add(feeFreeOut);
-                
-                
             }
            
         }
@@ -277,20 +272,30 @@ contract UniswapV2Pair is IUniswapV2Pair, UniswapV2ERC20 {
             uint balance1Adjusted = balance1.mul(1000).sub(amount1In.mul(3));
             require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(1000**2), 'UniswapV2: K');
         }else{
-            if(swapVals.partialDiscount == false)
-            {
-                uint balance0Adjusted = balance0;
-                uint balance1Adjusted = balance1;
-                require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1), 'UniswapV2: K');
-            }else
-            {
-                uint balance0Adjusted = balance0.mul(1000).sub(swapVals.feePaidPart.mul(3));
-                uint balance1Adjusted = balance1.mul(1000).sub(swapVals.feePaidPart.mul(3));
-                require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1), 'UniswapV2: K');
+             
+                uint balance0Adjusted;
+                uint balance1Adjusted;
+                
+                
+                if(swapVals.amount1Out > 0 ){
+                    
+                    balance1Adjusted = balance1.mul(1000);
+                }else{
+                    balance1Adjusted = balance1.mul(1000).sub(swapVals.feeAmount);
+                }
+                
+               
+                if(swapVals.amount0Out > 0){
+                    balance0Adjusted = balance0.mul(1000);
+                }else{
+                    
+                    balance0Adjusted = balance0.mul(1000).sub(swapVals.feeAmount);
+                }
+                 
+                require(balance0Adjusted.mul(balance1Adjusted) >= uint(_reserve0).mul(_reserve1).mul(1000**2), 'UniswapV2: K');
             }
             
-        }
-
+        
         _update(balance0, balance1, _reserve0, _reserve1);
         emit Swap(msg.sender, amount0In, amount1In, swapVals.amount0Out, swapVals.amount1Out, to);
     }
