@@ -7,7 +7,7 @@ import { solidity, MockProvider, createFixtureLoader } from 'ethereum-waffle'
 import { pairFixture } from './shared/fixtures'
 
 
-const BN = ethers.BigNumber
+const BN = ethers.BigNumber;
 chai.use(solidity)
 
 const overrides = {
@@ -90,7 +90,7 @@ describe('UniswapV2Pair', () => {
   })
   
 
-  async function addLiquidity(token0Amount: ethers.BigNumber, token1Amount: ethers.BigNumber) {
+  async function addLiquidity(token0Amount:any, token1Amount:any) {
     await token0.transfer(pair.address, token0Amount)
     await token1.transfer(pair.address, token1Amount)
     await pair.mint(wallet.address)
