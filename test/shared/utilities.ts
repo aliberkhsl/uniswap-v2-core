@@ -1,4 +1,4 @@
-import { Contract } from 'ethers'
+import { Contract, utils } from 'ethers'
 import { Web3Provider } from 'ethers/providers'
 import {
   BigNumber,
@@ -9,6 +9,7 @@ import {
   toUtf8Bytes,
   solidityPack
 } from 'ethers/utils'
+
 import { MockProvider} from 'ethereum-waffle'
 const PERMIT_TYPEHASH = keccak256(
   toUtf8Bytes('Permit(address owner,address spender,uint256 value,uint256 nonce,uint256 deadline)')

@@ -1,13 +1,12 @@
 import chai, { expect } from 'chai'
-import { Contract } from 'ethers'
+import { Contract, ethers } from 'ethers'
 import { solidity, MockProvider, createFixtureLoader } from 'ethereum-waffle'
-import { BigNumber, bigNumberify,formatEther} from 'ethers/utils'
+import {BigNumber,bigNumberify} from 'ethers/utils'
 
 import { expandTo18Decimals, mineBlock, encodePrice } from './shared/utilities'
 import { pairFixture } from './shared/fixtures'
 
 const MINIMUM_LIQUIDITY = bigNumberify(10).pow(3)
-
 chai.use(solidity)
 
 const overrides = {
@@ -48,16 +47,15 @@ describe('UniswapV2Pair', () => {
     expect(afterChange.token0FeeFree).to.equal(expectedOutputAmount)
 
     const reserves = await pair.getReserves()
-    console.log(formatEther(reserves[0]))
-    console.log(formatEther(reserves[1]))
+   
     let reserveOut = reserves[0]
     let reserveIn = reserves[1]
-    console.log(formatEther(expectedOutputAmount))
+   
     //With fee expected output
     let expectedAmountTwo = bigNumberify('994550668459521906')
     //Without fee expected transfer
     let expectedTransfer = bigNumberify('997271983268164043')
-    console.log(formatEther(expectedAmountTwo))
+  
     await token0.transfer(pair.address, expectedOutputAmount)
     await expect(pair.swap(0, expectedAmountTwo, wallet.address, '0x',overrides)).to.emit(token1, 'Transfer')
     .withArgs(pair.address, wallet.address, expectedTransfer)
@@ -67,19 +65,17 @@ describe('UniswapV2Pair', () => {
     expect(afterSecondSwap.token1FeeFree).to.eq(expectedTransfer)
 
     const reservesAfterSecond = await pair.getReserves()
-    console.log(formatEther(reservesAfterSecond[0]))
-    console.log(formatEther(reservesAfterSecond[1]))
+
     let expectedAmountThree = bigNumberify('1662951447800000000')
-    console.log(formatEther(expectedAmountThree))
+ 
     await token0.transfer(pair.address, swapAmount)
     await expect(pair.swap(0, expectedAmountThree, wallet.address, '0x',overrides)).to.emit(token1, 'Transfer')
     .withArgs(pair.address, wallet.address, expectedAmountThree)
 
     const reservesAfterThird = await pair.getReserves()
-    console.log(formatEther(reservesAfterThird[0]))
-    console.log(formatEther(reservesAfterThird[1]))
+
     const afterThird = await pair._freeFees(wallet.address)
-    console.log(formatEther(afterThird.token1FeeFree))
+   
     
     
     const expectedAmountFour = bigNumberify('1583827894833494895')
