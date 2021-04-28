@@ -1,12 +1,13 @@
 import chai, { expect } from 'chai'
 import { Contract, ethers } from 'ethers'
 import { solidity, MockProvider, createFixtureLoader } from 'ethereum-waffle'
-import {BigNumber,bigNumberify} from 'ethers/utils'
 
-import { expandTo18Decimals, mineBlock, encodePrice } from './shared/utilities'
+
+
 import { pairFixture } from './shared/fixtures'
 
-const MINIMUM_LIQUIDITY = bigNumberify(10).pow(3)
+
+const BN = ethers.BigNumber
 chai.use(solidity)
 
 const overrides = {
@@ -30,15 +31,15 @@ describe('UniswapV2Pair', () => {
     pair = fixture.pair
   })
   it('swap:withoutFee', async () => {
-    const token0Amount = expandTo18Decimals(5)
-    const token1Amount = expandTo18Decimals(10)
+    const token0Amount = ethers.utils.parseEther("5")
+    const token1Amount = ethers.utils.parseEther("10")
    
     await addLiquidity(token0Amount, token1Amount)
     const initialFreeFee = await pair._freeFees(wallet.address)
-    expect(initialFreeFee.token0FeeFree).to.eq(bigNumberify('0'))
-    const swapAmount = expandTo18Decimals(1)
+    expect(initialFreeFee.token0FeeFree).to.eq(ethers.utils.parseEther('0'))
+    const swapAmount = ethers.utils.parseEther("1")
     
-    const expectedOutputAmount = bigNumberify('453305446940074565')
+    const expectedOutputAmount = BN.from('453305446940074565')
     await token1.transfer(pair.address, swapAmount)
     await expect(pair.swap(expectedOutputAmount,0, wallet.address, '0x',overrides))
       .to.emit(token0, 'Transfer')
@@ -52,21 +53,21 @@ describe('UniswapV2Pair', () => {
     let reserveIn = reserves[1]
    
     //With fee expected output
-    let expectedAmountTwo = bigNumberify('994550668459521906')
+    let expectedAmountTwo = BN.from('994550668459521906')
     //Without fee expected transfer
-    let expectedTransfer = bigNumberify('997271983268164043')
+    let expectedTransfer = BN.from('997271983268164043')
   
     await token0.transfer(pair.address, expectedOutputAmount)
     await expect(pair.swap(0, expectedAmountTwo, wallet.address, '0x',overrides)).to.emit(token1, 'Transfer')
     .withArgs(pair.address, wallet.address, expectedTransfer)
     
     const afterSecondSwap = await pair._freeFees(wallet.address)
-    expect(afterSecondSwap.token0FeeFree).to.eq(bigNumberify('0'))
+    expect(afterSecondSwap.token0FeeFree).to.eq(BN.from('0'))
     expect(afterSecondSwap.token1FeeFree).to.eq(expectedTransfer)
 
     const reservesAfterSecond = await pair.getReserves()
 
-    let expectedAmountThree = bigNumberify('1662951447800000000')
+    let expectedAmountThree = BN.from('1662951447800000000')
  
     await token0.transfer(pair.address, swapAmount)
     await expect(pair.swap(0, expectedAmountThree, wallet.address, '0x',overrides)).to.emit(token1, 'Transfer')
@@ -78,9 +79,9 @@ describe('UniswapV2Pair', () => {
    
     
     
-    const expectedAmountFour = bigNumberify('1583827894833494895')
-    const expectedTransferFour = bigNumberify('1586936173173510706')
-    const fourthSwapAmount = expandTo18Decimals(3)
+    const expectedAmountFour = BN.from('1583827894833494895')
+    const expectedTransferFour = BN.from('1586936173173510706')
+    const fourthSwapAmount = ethers.utils.parseEther("3")
     await token1.transfer(pair.address, fourthSwapAmount)
     await expect(pair.swap(expectedAmountFour, 0, wallet.address, '0x',overrides)).to.emit(token0,'Transfer').withArgs(pair.address ,wallet.address,expectedTransferFour)
     const afterFourth = await pair._freeFees(wallet.address)
@@ -89,7 +90,7 @@ describe('UniswapV2Pair', () => {
   })
   
 
-  async function addLiquidity(token0Amount: BigNumber, token1Amount: BigNumber) {
+  async function addLiquidity(token0Amount: ethers.BigNumber, token1Amount: ethers.BigNumber) {
     await token0.transfer(pair.address, token0Amount)
     await token1.transfer(pair.address, token1Amount)
     await pair.mint(wallet.address)
